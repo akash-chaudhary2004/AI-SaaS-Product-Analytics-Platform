@@ -1,0 +1,27 @@
+# Core Data Processing
+pandas==2.3.2
+numpy==2.3.2
+
+# Synthetic Data
+Faker==37.8.0
+
+# Kafka
+kafka-python==2.2.15
+
+# Spark
+pyspark==4.0.1
+
+# Delta Lake
+delta-spark==4.0.0
+
+# AWS
+boto3==1.40.11
+
+# Environment Variables
+python-dotenv==1.1.1
+
+# Parquet Support
+pyarrow==21.0.0
+
+# Testing
+pytest==8.4.2
