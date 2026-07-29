@@ -13,11 +13,9 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from generators.schemas import (
-    AI_MODELS,
     DEVICE_TYPES,
     SUBSCRIPTION_PLANS,
 )
-
 
 # ==========================================================
 # Configuration
@@ -65,6 +63,29 @@ COUNTRY_PROFILES = [
     },
 ]
 
+# ==========================================================
+# Model Access by Subscription
+# ==========================================================
+
+MODEL_ACCESS = {
+    "Free": [
+        "Llama",
+        "Mistral",
+    ],
+    "Plus": [
+        "GPT-5",
+    ],
+    "Pro": [
+        "GPT-5",
+        "Claude",
+    ],
+    "Enterprise": [
+        "GPT-5",
+        "Claude",
+        "Gemini",
+        "Llama",
+    ],
+}
 
 # ==========================================================
 # Helper Functions
@@ -96,9 +117,6 @@ def generate_signup_date() -> str:
 def choose_subscription_plan() -> str:
     """
     Select a subscription plan using weighted probabilities.
-
-    Most simulated users are Free users, while fewer users
-    belong to paid or Enterprise plans.
     """
     return random.choices(
         SUBSCRIPTION_PLANS,
@@ -109,35 +127,11 @@ def choose_subscription_plan() -> str:
 
 def choose_preferred_model(subscription_plan: str) -> str:
     """
-    Choose a preferred AI model.
-
-    Paid users have a higher probability of using
-    more advanced models.
+    Select an AI model based on the user's subscription plan.
     """
-
-    if subscription_plan == "Free":
-        return random.choice(AI_MODELS)
-
-    if subscription_plan == "Plus":
-        return random.choices(
-            AI_MODELS,
-            weights=[0.45, 0.25, 0.20, 0.10],
-            k=1,
-        )[0]
-
-    if subscription_plan == "Pro":
-        return random.choices(
-            AI_MODELS,
-            weights=[0.55, 0.25, 0.15, 0.05],
-            k=1,
-        )[0]
-
-    # Enterprise
-    return random.choices(
-        AI_MODELS,
-        weights=[0.50, 0.30, 0.15, 0.05],
-        k=1,
-    )[0]
+    return random.choice(
+        MODEL_ACCESS[subscription_plan]
+    )
 
 
 # ==========================================================
@@ -155,21 +149,14 @@ def generate_user() -> dict:
 
     user = {
         "user_id": generate_user_id(),
-
         "signup_date": generate_signup_date(),
-
         "subscription_plan": subscription_plan,
-
         "country": location["country"],
-
         "timezone": location["timezone"],
-
         "language": location["language"],
-
         "preferred_model": choose_preferred_model(
             subscription_plan
         ),
-
         "device_preference": random.choice(
             DEVICE_TYPES
         ),

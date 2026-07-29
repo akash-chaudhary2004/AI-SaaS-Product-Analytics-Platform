@@ -9,21 +9,11 @@ User
     ↓
 Session
     ↓
-Login
+Event Generator
     ↓
-Chat Started
-    ↓
-Prompt Submitted
-    ↓
-Response Generated
-    ↓
-Prompt Submitted
-    ↓
-Response Generated
-    ↓
-Feedback Submitted
-    ↓
-Logout
+Event Stream
+
+Later this stream will be sent directly to Kafka.
 """
 
 import random
@@ -32,11 +22,12 @@ from pprint import pprint
 
 from generators.user_generator import generate_user
 from generators.session_generator import generate_session
+from generators.event_generator import generate_event
 
 
-# =====================================================
+# ==========================================================
 # Fixed Event Flow
-# =====================================================
+# ==========================================================
 
 EVENT_FLOW = [
     "user_login",
@@ -50,52 +41,66 @@ EVENT_FLOW = [
 ]
 
 
-# =====================================================
-# User Journey
-# =====================================================
+# ==========================================================
+# Event Stream Generator
+# ==========================================================
 
 def simulate_user_journey():
     """
-    Simulate one complete user session.
+    Simulate one complete AI SaaS user journey.
+
+    Returns
+    -------
+    generator
+        Generates one complete event at a time.
     """
 
-    # Create user
     user = generate_user()
 
-    # Create session
     session = generate_session(user)
 
-    print("=" * 70)
+    print("=" * 80)
     print("NEW USER")
     pprint(user)
 
     print("\nNEW SESSION")
     pprint(session)
 
-    print("\nEVENT FLOW")
-    print("-" * 70)
+    print("\nSTREAMING EVENTS")
+    print("-" * 80)
 
-    for step, event in enumerate(EVENT_FLOW, start=1):
+    for step, event_name in enumerate(EVENT_FLOW, start=1):
 
-        print(
-            f"[{step}] "
-            f"{event.upper()} | "
-            f"User={user['user_id']} | "
-            f"Session={session['session_id']}"
+        event = generate_event(
+            event_name,
+            user,
+            session
         )
 
-        # Small delay to simulate real activity
-        time.sleep(random.uniform(0.5, 1.5))
+        print(
+            f"\n[{step}] {event_name.upper()}"
+        )
 
-    print("-" * 70)
+        pprint(event)
+
+        # This yield is the important change.
+        # Kafka Producer will consume these events later.
+        yield event
+
+        time.sleep(
+            random.uniform(0.5, 1.5)
+        )
+
+    print("-" * 80)
     print("SESSION COMPLETED")
-    print("=" * 70)
+    print("=" * 80)
 
 
-# =====================================================
-# Main
-# =====================================================
+# ==========================================================
+# Local Test
+# ==========================================================
 
 if __name__ == "__main__":
 
-    simulate_user_journey()
+    for _ in simulate_user_journey():
+        pass
