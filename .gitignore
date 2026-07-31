@@ -31,6 +31,8 @@ derby.log
 
 # Generated Lakehouse Data
 data/bronze/
+data/silver/
+data/gold/
 data/checkpoints/
 
 # Test
