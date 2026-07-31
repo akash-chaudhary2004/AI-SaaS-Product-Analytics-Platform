@@ -25,6 +25,13 @@ logs/
 # Spark
 spark-warehouse/
 metastore_db/
+.metastore_db/
+.sparkStaging/
+derby.log
+
+# Generated Lakehouse Data
+data/bronze/
+data/checkpoints/
 
 # Test
 .pytest_cache/
