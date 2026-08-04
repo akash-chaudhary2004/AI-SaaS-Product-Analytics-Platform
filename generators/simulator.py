@@ -1,19 +1,26 @@
 """
 AI SaaS User Simulator
 
-This module simulates a complete user journey
-through an AI SaaS application.
+This module simulates a complete AI SaaS user journey.
 
 Flow:
+
 User
     ↓
 Session
     ↓
-Event Generator
+Login
     ↓
-Event Stream
+Chat Started
+    ↓
+1–5 Prompt / Response pairs
+    ↓
+(Optional) Feedback
+    ↓
+Logout
 
-Later this stream will be sent directly to Kafka.
+Each event is yielded one-by-one so that the Kafka
+Producer can stream events in real time.
 """
 
 import random
@@ -26,37 +33,24 @@ from generators.event_generator import generate_event
 
 
 # ==========================================================
-# Fixed Event Flow
-# ==========================================================
-
-EVENT_FLOW = [
-    "user_login",
-    "chat_started",
-    "prompt_submitted",
-    "response_generated",
-    "prompt_submitted",
-    "response_generated",
-    "feedback_submitted",
-    "user_logout",
-]
-
-
-# ==========================================================
-# Event Stream Generator
+# User Journey Simulator
 # ==========================================================
 
 def simulate_user_journey():
     """
     Simulate one complete AI SaaS user journey.
 
-    Returns
-    -------
-    generator
-        Generates one complete event at a time.
+    Yields
+    ------
+    dict
+        One event at a time.
     """
 
-    user = generate_user()
+    # ------------------------------------------------------
+    # Create User & Session
+    # ------------------------------------------------------
 
+    user = generate_user()
     session = generate_session(user)
 
     print("=" * 80)
@@ -69,27 +63,122 @@ def simulate_user_journey():
     print("\nSTREAMING EVENTS")
     print("-" * 80)
 
-    for step, event_name in enumerate(EVENT_FLOW, start=1):
+    step = 1
+
+    # ======================================================
+    # USER LOGIN
+    # ======================================================
+
+    event = generate_event(
+        "user_login",
+        user,
+        session
+    )
+
+    print(f"\n[{step}] USER_LOGIN")
+    pprint(event)
+
+    yield event
+
+    step += 1
+    time.sleep(random.uniform(0.5, 1.5))
+
+    # ======================================================
+    # CHAT STARTED
+    # ======================================================
+
+    event = generate_event(
+        "chat_started",
+        user,
+        session
+    )
+
+    print(f"\n[{step}] CHAT_STARTED")
+    pprint(event)
+
+    yield event
+
+    step += 1
+    time.sleep(random.uniform(0.5, 1.5))
+
+    # ======================================================
+    # RANDOM PROMPTS
+    # ======================================================
+
+    prompt_count = random.randint(1, 5)
+
+    for _ in range(prompt_count):
+
+        # ----------------------------------------------
+        # Prompt Submitted
+        # ----------------------------------------------
 
         event = generate_event(
-            event_name,
+            "prompt_submitted",
             user,
             session
         )
 
-        print(
-            f"\n[{step}] {event_name.upper()}"
-        )
-
+        print(f"\n[{step}] PROMPT_SUBMITTED")
         pprint(event)
 
-        # This yield is the important change.
-        # Kafka Producer will consume these events later.
         yield event
 
-        time.sleep(
-            random.uniform(0.5, 1.5)
+        step += 1
+        time.sleep(random.uniform(0.5, 1.5))
+
+        # ----------------------------------------------
+        # Response Generated
+        # ----------------------------------------------
+
+        event = generate_event(
+            "response_generated",
+            user,
+            session
         )
+
+        print(f"\n[{step}] RESPONSE_GENERATED")
+        pprint(event)
+
+        yield event
+
+        step += 1
+        time.sleep(random.uniform(0.5, 1.5))
+
+    # ======================================================
+    # OPTIONAL FEEDBACK
+    # ======================================================
+
+    if random.random() < 0.8:
+
+        event = generate_event(
+            "feedback_submitted",
+            user,
+            session
+        )
+
+        print(f"\n[{step}] FEEDBACK_SUBMITTED")
+        pprint(event)
+
+        yield event
+
+        step += 1
+        time.sleep(random.uniform(0.5, 1.5))
+
+    # ======================================================
+    # USER LOGOUT
+    # ======================================================
+
+    event = generate_event(
+        "user_logout",
+        user,
+        session
+    )
+
+    print(f"\n[{step}] USER_LOGOUT")
+    pprint(event)
+
+    yield event
 
     print("-" * 80)
     print("SESSION COMPLETED")
