@@ -1,9 +1,9 @@
 """
 AI SaaS User Simulator
 
-This module simulates a complete AI SaaS user journey.
+Simulates a realistic AI SaaS user journey.
 
-Flow:
+Flow
 
 User
     ↓
@@ -13,14 +13,14 @@ Login
     ↓
 Chat Started
     ↓
-1–5 Prompt / Response pairs
+2–8 Prompt / Response pairs
     ↓
 (Optional) Feedback
     ↓
 Logout
 
-Each event is yielded one-by-one so that the Kafka
-Producer can stream events in real time.
+Each event is yielded one-by-one so that the
+Kafka Producer can stream events in real time.
 """
 
 import random
@@ -30,6 +30,32 @@ from pprint import pprint
 from generators.user_generator import generate_user
 from generators.session_generator import generate_session
 from generators.event_generator import generate_event
+
+
+# ==========================================================
+# Helper
+# ==========================================================
+
+def pause():
+    """
+    Small random delay between events.
+    """
+    time.sleep(random.uniform(0.5, 1.5))
+
+
+def get_prompt_count():
+    """
+    Simulate realistic AI SaaS usage.
+
+    Most users ask 2–4 prompts.
+    Some users ask 5–8 prompts.
+    """
+
+    return random.choices(
+        population=[2, 3, 4, 5, 6, 7, 8],
+        weights=[20, 25, 20, 15, 10, 5, 5],
+        k=1
+    )[0]
 
 
 # ==========================================================
@@ -81,7 +107,7 @@ def simulate_user_journey():
     yield event
 
     step += 1
-    time.sleep(random.uniform(0.5, 1.5))
+    pause()
 
     # ======================================================
     # CHAT STARTED
@@ -99,19 +125,21 @@ def simulate_user_journey():
     yield event
 
     step += 1
-    time.sleep(random.uniform(0.5, 1.5))
+    pause()
 
     # ======================================================
-    # RANDOM PROMPTS
+    # PROMPTS & RESPONSES
     # ======================================================
 
-    prompt_count = random.randint(1, 5)
+    prompt_count = get_prompt_count()
+
+    print(f"\nGenerating {prompt_count} Prompt/Response pairs...\n")
 
     for _ in range(prompt_count):
 
-        # ----------------------------------------------
+        # --------------------------------------------------
         # Prompt Submitted
-        # ----------------------------------------------
+        # --------------------------------------------------
 
         event = generate_event(
             "prompt_submitted",
@@ -119,17 +147,17 @@ def simulate_user_journey():
             session
         )
 
-        print(f"\n[{step}] PROMPT_SUBMITTED")
+        print(f"[{step}] PROMPT_SUBMITTED")
         pprint(event)
 
         yield event
 
         step += 1
-        time.sleep(random.uniform(0.5, 1.5))
+        pause()
 
-        # ----------------------------------------------
+        # --------------------------------------------------
         # Response Generated
-        # ----------------------------------------------
+        # --------------------------------------------------
 
         event = generate_event(
             "response_generated",
@@ -137,19 +165,19 @@ def simulate_user_journey():
             session
         )
 
-        print(f"\n[{step}] RESPONSE_GENERATED")
+        print(f"[{step}] RESPONSE_GENERATED")
         pprint(event)
 
         yield event
 
         step += 1
-        time.sleep(random.uniform(0.5, 1.5))
+        pause()
 
     # ======================================================
     # OPTIONAL FEEDBACK
     # ======================================================
 
-    if random.random() < 0.8:
+    if random.random() < 0.80:
 
         event = generate_event(
             "feedback_submitted",
@@ -157,13 +185,13 @@ def simulate_user_journey():
             session
         )
 
-        print(f"\n[{step}] FEEDBACK_SUBMITTED")
+        print(f"[{step}] FEEDBACK_SUBMITTED")
         pprint(event)
 
         yield event
 
         step += 1
-        time.sleep(random.uniform(0.5, 1.5))
+        pause()
 
     # ======================================================
     # USER LOGOUT
@@ -175,7 +203,7 @@ def simulate_user_journey():
         session
     )
 
-    print(f"\n[{step}] USER_LOGOUT")
+    print(f"[{step}] USER_LOGOUT")
     pprint(event)
 
     yield event
