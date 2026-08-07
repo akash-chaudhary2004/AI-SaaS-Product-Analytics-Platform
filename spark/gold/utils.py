@@ -1,45 +1,83 @@
 """
+AI SaaS Product Analytics Platform
 Gold Layer Utility Functions
 
-Shared helper functions used by all Gold modules.
+Shared utility functions used by every Gold layer module.
 
 Responsibilities
 ----------------
 1. Create Spark Session
 2. Read Silver Dataset
 3. Write Gold Dataset
-4. Logging
+4. Print formatted logs
+5. Common project paths
+
+Compatible with:
+- Docker (/app)
+- Windows (local execution)
 """
 
 from pathlib import Path
 
-from pyspark.sql import SparkSession
 from pyspark.sql import DataFrame
+from pyspark.sql import SparkSession
 
 
-# ==========================================================
+# ==============================================================================
 # Project Paths
-# ==========================================================
+# ==============================================================================
 
-from pathlib import Path
-
-# Works in both Docker and Windows
 if Path("/app").exists():
     PROJECT_ROOT = Path("/app")
 else:
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-SILVER_PATH = PROJECT_ROOT / "data" / "silver" / "events"
+DATA_PATH = PROJECT_ROOT / "data"
 
-GOLD_PATH = PROJECT_ROOT / "data" / "gold"
+SILVER_PATH = DATA_PATH / "silver" / "events"
 
-# ==========================================================
+GOLD_PATH = DATA_PATH / "gold"
+
+
+# ==============================================================================
+# Console Helpers
+# ==============================================================================
+
+def print_header(title: str) -> None:
+    """
+    Print formatted section header.
+    """
+
+    print()
+    print("=" * 80)
+    print(title)
+    print("=" * 80)
+
+
+def print_success(message: str) -> None:
+    """
+    Print success message.
+    """
+
+    print()
+    print("✓", message)
+
+
+# ==============================================================================
 # Spark Session
-# ==========================================================
+# ==============================================================================
 
 def create_spark_session(app_name: str) -> SparkSession:
     """
-    Create Spark session for Gold layer.
+    Create Spark Session.
+
+    Parameters
+    ----------
+    app_name : str
+
+    Returns
+    -------
+    SparkSession
     """
 
     spark = (
@@ -53,40 +91,51 @@ def create_spark_session(app_name: str) -> SparkSession:
     return spark
 
 
-# ==========================================================
+# ==============================================================================
 # Read Silver Dataset
-# ==========================================================
+# ==============================================================================
 
-def read_silver_data(spark: SparkSession) -> DataFrame:
+def read_silver_data(
+    spark: SparkSession,
+) -> DataFrame:
     """
-    Read cleaned Silver dataset.
+    Read Silver Parquet dataset.
+
+    Parameters
+    ----------
+    spark : SparkSession
+
+    Returns
+    -------
+    DataFrame
     """
 
-    print("=" * 80)
-    print("Reading Silver Dataset")
-    print("=" * 80)
+    print_header("Reading Silver Dataset")
 
     df = spark.read.parquet(str(SILVER_PATH))
 
-    print(f"Records Loaded : {df.count()}")
+    print(f"Silver Path     : {SILVER_PATH}")
+    print(f"Records Loaded  : {df.count()}")
 
     return df
 
 
-# ==========================================================
+# ==============================================================================
 # Write Gold Dataset
-# ==========================================================
+# ==============================================================================
 
 def write_gold_table(
     dataframe: DataFrame,
     table_name: str,
-):
+) -> None:
     """
-    Save one Gold dataset.
+    Save Gold dataset.
 
-    Example
-    -------
-    data/gold/user_activity/
+    Parameters
+    ----------
+    dataframe : DataFrame
+
+    table_name : str
     """
 
     output_path = GOLD_PATH / table_name
@@ -97,19 +146,70 @@ def write_gold_table(
         .parquet(str(output_path))
     )
 
-    print(f"Saved : {output_path}")
+    print_success(f"Gold table saved successfully")
+
+    print(f"Location : {output_path}")
 
 
-# ==========================================================
-# Section Header
-# ==========================================================
+# ==============================================================================
+# Dataset Summary
+# ==============================================================================
 
-def print_header(title: str):
+def dataset_summary(
+    dataframe: DataFrame,
+    dataset_name: str,
+) -> None:
     """
-    Print formatted section header.
+    Print dataset summary.
     """
 
     print()
-    print("=" * 80)
-    print(title)
-    print("=" * 80)
+    print("-" * 80)
+    print(f"{dataset_name} Summary")
+    print("-" * 80)
+
+    print(f"Rows    : {dataframe.count()}")
+
+    print(f"Columns : {len(dataframe.columns)}")
+
+    dataframe.printSchema()
+
+
+# ==============================================================================
+# Validate Required Columns
+# ==============================================================================
+
+def validate_columns(
+    dataframe: DataFrame,
+    required_columns: list[str],
+) -> None:
+    """
+    Validate DataFrame schema.
+    """
+
+    missing = [
+        column
+        for column in required_columns
+        if column not in dataframe.columns
+    ]
+
+    if missing:
+        raise ValueError(
+            f"Missing required columns: {missing}"
+        )
+
+
+# ==============================================================================
+# Stop Spark Session
+# ==============================================================================
+
+def stop_spark(
+    spark: SparkSession,
+) -> None:
+    """
+    Stop Spark Session.
+    """
+
+    spark.stop()
+
+    print_success("Spark Session Stopped")
