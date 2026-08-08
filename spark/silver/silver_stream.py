@@ -4,49 +4,43 @@ Silver Processing Layer
 
 Purpose
 -------
-Read raw Bronze Parquet events, parse the JSON payload,
-apply a defined schema, validate important fields,
-remove duplicate events, and write clean structured
-records into the Silver layer.
+Read raw Bronze events, parse JSON payloads, normalize the event schema,
+apply event-aware validation, preserve business fields, remove duplicates,
+and write analytics-ready Silver Parquet data.
 
 Pipeline
 --------
 Kafka
-  ↓
-Spark Structured Streaming
-  ↓
-Bronze Parquet
-  ↓
-Silver Processing
-  ├── Parse JSON
-  ├── Apply Schema
-  ├── Validate Records
-  ├── Correct Data Types
-  └── Remove Duplicates
-  ↓
-Silver Parquet
+    ↓
+Bronze
+    ↓
+Silver
+    ├── JSON parsing
+    ├── Schema enforcement
+    ├── Event-aware validation
+    ├── Type conversion
+    ├── Event ID generation
+    ├── Duplicate removal
+    ├── Data-quality reporting
+    └── Parquet output
 """
 
+from pyspark.sql import DataFrame
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import (
-    col,
-    from_json,
-    to_timestamp,
-)
+from pyspark.sql import functions as F
 from pyspark.sql.types import (
     BooleanType,
     DoubleType,
     IntegerType,
-    LongType,
     StringType,
     StructField,
     StructType,
 )
 
 
-# ==========================================================
+# ==============================================================================
 # Configuration
-# ==========================================================
+# ==============================================================================
 
 APP_NAME = "AI-SaaS-Silver-Processing"
 
@@ -55,102 +49,441 @@ BRONZE_INPUT_PATH = "/app/data/bronze/events"
 SILVER_OUTPUT_PATH = "/app/data/silver/events"
 
 
-# ==========================================================
+# ==============================================================================
 # Event Schema
-# ==========================================================
+# ==============================================================================
 
 EVENT_SCHEMA = StructType(
     [
-        # --------------------------------------------------
-        # Common event fields
-        # --------------------------------------------------
 
-        StructField("event_id", StringType(), True),
+        # ----------------------------------------------------------------------
+        # Common Event Information
+        # ----------------------------------------------------------------------
 
-        StructField("timestamp", StringType(), True),
+        StructField(
+            "event_id",
+            StringType(),
+            True,
+        ),
 
-        StructField("event_type", StringType(), True),
+        StructField(
+            "timestamp",
+            StringType(),
+            True,
+        ),
 
-        StructField("user_id", StringType(), True),
+        StructField(
+            "event_type",
+            StringType(),
+            True,
+        ),
 
-        StructField("session_id", StringType(), True),
+        StructField(
+            "user_id",
+            StringType(),
+            True,
+        ),
 
-        StructField("country", StringType(), True),
+        StructField(
+            "session_id",
+            StringType(),
+            True,
+        ),
 
-        StructField("subscription_plan", StringType(), True),
+        # ----------------------------------------------------------------------
+        # User / Customer Information
+        # ----------------------------------------------------------------------
 
-        StructField("model_name", StringType(), True),
+        StructField(
+            "signup_timestamp",
+            StringType(),
+            True,
+        ),
 
-        # --------------------------------------------------
-        # Login fields
-        # --------------------------------------------------
+        StructField(
+            "country",
+            StringType(),
+            True,
+        ),
 
-        StructField("browser", StringType(), True),
+        StructField(
+            "region",
+            StringType(),
+            True,
+        ),
 
-        StructField("device_type", StringType(), True),
+        StructField(
+            "city",
+            StringType(),
+            True,
+        ),
 
-        StructField("operating_system", StringType(), True),
+        StructField(
+            "timezone",
+            StringType(),
+            True,
+        ),
 
-        StructField("ip_address", StringType(), True),
+        StructField(
+            "language",
+            StringType(),
+            True,
+        ),
 
-        # --------------------------------------------------
-        # Chat fields
-        # --------------------------------------------------
+        StructField(
+            "currency",
+            StringType(),
+            True,
+        ),
 
-        StructField("chat_id", StringType(), True),
+        StructField(
+            "industry",
+            StringType(),
+            True,
+        ),
 
-        # --------------------------------------------------
-        # Prompt fields
-        # --------------------------------------------------
+        StructField(
+            "company_size",
+            StringType(),
+            True,
+        ),
 
-        StructField("prompt_category", StringType(), True),
+        StructField(
+            "job_role",
+            StringType(),
+            True,
+        ),
 
-        StructField("prompt_text", StringType(), True),
+        StructField(
+            "device_preference",
+            StringType(),
+            True,
+        ),
 
-        # --------------------------------------------------
-        # Response fields
-        # --------------------------------------------------
+        # ----------------------------------------------------------------------
+        # Subscription Information
+        # ----------------------------------------------------------------------
 
-        StructField("latency_ms", IntegerType(), True),
+        StructField(
+            "subscription_plan",
+            StringType(),
+            True,
+        ),
 
-        StructField("prompt_tokens", IntegerType(), True),
+        StructField(
+            "plan_price",
+            DoubleType(),
+            True,
+        ),
 
-        StructField("completion_tokens", IntegerType(), True),
+        StructField(
+            "subscription_id",
+            StringType(),
+            True,
+        ),
 
-        StructField("total_tokens", IntegerType(), True),
+        StructField(
+            "monthly_price",
+            DoubleType(),
+            True,
+        ),
 
-        StructField("response_cost", DoubleType(), True),
+        StructField(
+            "billing_cycle",
+            StringType(),
+            True,
+        ),
 
-        StructField("success", BooleanType(), True),
+        StructField(
+            "trial_start",
+            StringType(),
+            True,
+        ),
 
-        # --------------------------------------------------
-        # Feedback fields
-        # --------------------------------------------------
+        StructField(
+            "trial_end",
+            StringType(),
+            True,
+        ),
 
-        StructField("feedback", StringType(), True),
+        StructField(
+            "subscription_status",
+            StringType(),
+            True,
+        ),
 
-        StructField("rating", IntegerType(), True),
+        # ----------------------------------------------------------------------
+        # Payment Information
+        # ----------------------------------------------------------------------
 
-        # --------------------------------------------------
-        # Logout fields
-        # --------------------------------------------------
+        StructField(
+            "invoice_id",
+            StringType(),
+            True,
+        ),
+
+        StructField(
+            "payment_id",
+            StringType(),
+            True,
+        ),
+
+        StructField(
+            "amount",
+            DoubleType(),
+            True,
+        ),
+
+        StructField(
+            "payment_status",
+            StringType(),
+            True,
+        ),
+
+        # ----------------------------------------------------------------------
+        # Session / Device Information
+        # ----------------------------------------------------------------------
+
+        StructField(
+            "login_time",
+            StringType(),
+            True,
+        ),
+
+        StructField(
+            "logout_time",
+            StringType(),
+            True,
+        ),
 
         StructField(
             "session_duration_minutes",
             IntegerType(),
             True,
         ),
+
+        StructField(
+            "browser",
+            StringType(),
+            True,
+        ),
+
+        StructField(
+            "device_type",
+            StringType(),
+            True,
+        ),
+
+        StructField(
+            "operating_system",
+            StringType(),
+            True,
+        ),
+
+        StructField(
+            "ip_address",
+            StringType(),
+            True,
+        ),
+
+        # ----------------------------------------------------------------------
+        # Chat Information
+        # ----------------------------------------------------------------------
+
+        StructField(
+            "chat_id",
+            StringType(),
+            True,
+        ),
+
+        # ----------------------------------------------------------------------
+        # Prompt Information
+        # ----------------------------------------------------------------------
+
+        StructField(
+            "prompt_id",
+            StringType(),
+            True,
+        ),
+
+        StructField(
+            "prompt_category",
+            StringType(),
+            True,
+        ),
+
+        StructField(
+            "prompt_text",
+            StringType(),
+            True,
+        ),
+
+        StructField(
+            "prompt_language",
+            StringType(),
+            True,
+        ),
+
+        StructField(
+            "prompt_length",
+            IntegerType(),
+            True,
+        ),
+
+        StructField(
+            "prompt_complexity",
+            StringType(),
+            True,
+        ),
+
+        StructField(
+            "contains_code",
+            BooleanType(),
+            True,
+        ),
+
+        StructField(
+            "contains_image",
+            BooleanType(),
+            True,
+        ),
+
+        # ----------------------------------------------------------------------
+        # AI Model Information
+        # ----------------------------------------------------------------------
+
+        StructField(
+            "model_provider",
+            StringType(),
+            True,
+        ),
+
+        StructField(
+            "model_name",
+            StringType(),
+            True,
+        ),
+
+        # ----------------------------------------------------------------------
+        # AI Performance Information
+        # ----------------------------------------------------------------------
+
+        StructField(
+            "latency_ms",
+            IntegerType(),
+            True,
+        ),
+
+        StructField(
+            "queue_time_ms",
+            IntegerType(),
+            True,
+        ),
+
+        StructField(
+            "inference_time_ms",
+            IntegerType(),
+            True,
+        ),
+
+        StructField(
+            "render_time_ms",
+            IntegerType(),
+            True,
+        ),
+
+        StructField(
+            "prompt_tokens",
+            IntegerType(),
+            True,
+        ),
+
+        StructField(
+            "completion_tokens",
+            IntegerType(),
+            True,
+        ),
+
+        StructField(
+            "total_tokens",
+            IntegerType(),
+            True,
+        ),
+
+        StructField(
+            "response_cost",
+            DoubleType(),
+            True,
+        ),
+
+        StructField(
+            "success",
+            BooleanType(),
+            True,
+        ),
+
+        StructField(
+            "retry_count",
+            IntegerType(),
+            True,
+        ),
+
+        StructField(
+            "cache_hit",
+            BooleanType(),
+            True,
+        ),
+
+        StructField(
+            "finish_reason",
+            StringType(),
+            True,
+        ),
+
+        StructField(
+            "temperature",
+            DoubleType(),
+            True,
+        ),
+
+        StructField(
+            "max_tokens",
+            IntegerType(),
+            True,
+        ),
+
+        # ----------------------------------------------------------------------
+        # Feedback Information
+        # ----------------------------------------------------------------------
+
+        StructField(
+            "feedback",
+            StringType(),
+            True,
+        ),
+
+        StructField(
+            "rating",
+            IntegerType(),
+            True,
+        ),
+
+        StructField(
+            "feedback_reason",
+            StringType(),
+            True,
+        ),
     ]
 )
 
 
-# ==========================================================
+# ==============================================================================
 # Spark Session
-# ==========================================================
+# ==============================================================================
 
-def create_spark_session():
+def create_spark_session() -> SparkSession:
     """
-    Create the Spark session for Silver processing.
+    Create Spark session for Silver processing.
     """
 
     spark = (
@@ -164,327 +497,933 @@ def create_spark_session():
     return spark
 
 
-# ==========================================================
+# ==============================================================================
 # Read Bronze
-# ==========================================================
+# ==============================================================================
 
-def read_bronze_data(spark):
+def read_bronze_data(
+    spark: SparkSession,
+) -> DataFrame:
     """
-    Read raw Bronze Parquet files.
+    Read Bronze Parquet dataset.
     """
+
+    print()
+    print("=" * 80)
+    print("READING BRONZE DATASET")
+    print("=" * 80)
+
+    print(
+        f"Bronze Input : {BRONZE_INPUT_PATH}"
+    )
 
     bronze_df = spark.read.parquet(
         BRONZE_INPUT_PATH
     )
 
+    print(
+        f"Bronze Records : {bronze_df.count()}"
+    )
+
     return bronze_df
 
 
-# ==========================================================
-# Parse Raw JSON
-# ==========================================================
+# ==============================================================================
+# Parse JSON
+# ==============================================================================
 
-def parse_events(bronze_df):
+def parse_events(
+    bronze_df: DataFrame,
+) -> DataFrame:
     """
-    Parse raw_event JSON using the explicit event schema.
+    Parse raw JSON events using the explicit schema.
     """
 
-    parsed_df = bronze_df.withColumn(
-        "event",
-        from_json(
-            col("raw_event"),
-            EVENT_SCHEMA,
-        ),
+    print()
+    print("=" * 80)
+    print("PARSING BRONZE JSON EVENTS")
+    print("=" * 80)
+
+    return (
+        bronze_df
+        .withColumn(
+            "event",
+            F.from_json(
+                F.col("raw_event"),
+                EVENT_SCHEMA,
+            ),
+        )
+        .withColumn(
+            "json_parse_success",
+            F.col("event").isNotNull(),
+        )
     )
 
-    return parsed_df
 
+# ==============================================================================
+# Flatten Event Structure
+# ==============================================================================
 
-# ==========================================================
-# Flatten Event Data
-# ==========================================================
-
-def flatten_events(parsed_df):
+def flatten_events(
+    parsed_df: DataFrame,
+) -> DataFrame:
     """
-    Convert the parsed event structure into normal columns
-    while preserving important Kafka metadata.
+    Convert nested event structure into flat analytics columns.
     """
+
+    print()
+    print("=" * 80)
+    print("FLATTENING EVENT STRUCTURE")
+    print("=" * 80)
 
     silver_df = parsed_df.select(
 
-        # Common fields
-        col("event.event_id").alias("event_id"),
+        # ----------------------------------------------------------------------
+        # Event Identity
+        # ----------------------------------------------------------------------
 
-        to_timestamp(
-            col("event.timestamp")
-        ).alias("event_timestamp"),
+        F.col("event.event_id").alias(
+            "event_id"
+        ),
 
-        col("event.event_type").alias("event_type"),
+        F.to_timestamp(
+            F.col("event.timestamp")
+        ).alias(
+            "event_timestamp"
+        ),
 
-        col("event.user_id").alias("user_id"),
+        F.col("event.event_type").alias(
+            "event_type"
+        ),
 
-        col("event.session_id").alias("session_id"),
+        F.col("event.user_id").alias(
+            "user_id"
+        ),
 
-        col("event.country").alias("country"),
+        F.col("event.session_id").alias(
+            "session_id"
+        ),
 
-        col("event.subscription_plan").alias(
+        # ----------------------------------------------------------------------
+        # User / Customer
+        # ----------------------------------------------------------------------
+
+        F.to_timestamp(
+            F.col("event.signup_timestamp")
+        ).alias(
+            "signup_timestamp"
+        ),
+
+        F.col("event.country").alias(
+            "country"
+        ),
+
+        F.col("event.region").alias(
+            "region"
+        ),
+
+        F.col("event.city").alias(
+            "city"
+        ),
+
+        F.col("event.timezone").alias(
+            "timezone"
+        ),
+
+        F.col("event.language").alias(
+            "language"
+        ),
+
+        F.col("event.currency").alias(
+            "currency"
+        ),
+
+        F.col("event.industry").alias(
+            "industry"
+        ),
+
+        F.col("event.company_size").alias(
+            "company_size"
+        ),
+
+        F.col("event.job_role").alias(
+            "job_role"
+        ),
+
+        F.col("event.device_preference").alias(
+            "device_preference"
+        ),
+
+        # ----------------------------------------------------------------------
+        # Subscription
+        # ----------------------------------------------------------------------
+
+        F.col("event.subscription_plan").alias(
             "subscription_plan"
         ),
 
-        col("event.model_name").alias("model_name"),
+        F.col("event.plan_price").alias(
+            "plan_price"
+        ),
 
-        # Login fields
-        col("event.browser").alias("browser"),
+        F.col("event.subscription_id").alias(
+            "subscription_id"
+        ),
 
-        col("event.device_type").alias("device_type"),
+        F.col("event.monthly_price").alias(
+            "monthly_price"
+        ),
 
-        col("event.operating_system").alias(
+        F.col("event.billing_cycle").alias(
+            "billing_cycle"
+        ),
+
+        F.to_timestamp(
+            F.col("event.trial_start")
+        ).alias(
+            "trial_start"
+        ),
+
+        F.to_timestamp(
+            F.col("event.trial_end")
+        ).alias(
+            "trial_end"
+        ),
+
+        F.col("event.subscription_status").alias(
+            "subscription_status"
+        ),
+
+        # ----------------------------------------------------------------------
+        # Payment
+        # ----------------------------------------------------------------------
+
+        F.col("event.invoice_id").alias(
+            "invoice_id"
+        ),
+
+        F.col("event.payment_id").alias(
+            "payment_id"
+        ),
+
+        F.col("event.amount").alias(
+            "amount"
+        ),
+
+        F.col("event.payment_status").alias(
+            "payment_status"
+        ),
+
+        # ----------------------------------------------------------------------
+        # Session / Device
+        # ----------------------------------------------------------------------
+
+        F.to_timestamp(
+            F.col("event.login_time")
+        ).alias(
+            "login_time"
+        ),
+
+        F.to_timestamp(
+            F.col("event.logout_time")
+        ).alias(
+            "logout_time"
+        ),
+
+        F.col(
+            "event.session_duration_minutes"
+        ).alias(
+            "session_duration_minutes"
+        ),
+
+        F.col("event.browser").alias(
+            "browser"
+        ),
+
+        F.col("event.device_type").alias(
+            "device_type"
+        ),
+
+        F.col("event.operating_system").alias(
             "operating_system"
         ),
 
-        col("event.ip_address").alias("ip_address"),
+        F.col("event.ip_address").alias(
+            "ip_address"
+        ),
 
-        # Chat fields
-        col("event.chat_id").alias("chat_id"),
+        # ----------------------------------------------------------------------
+        # Chat
+        # ----------------------------------------------------------------------
 
-        # Prompt fields
-        col("event.prompt_category").alias(
+        F.col("event.chat_id").alias(
+            "chat_id"
+        ),
+
+        # ----------------------------------------------------------------------
+        # Prompt
+        # ----------------------------------------------------------------------
+
+        F.col("event.prompt_id").alias(
+            "prompt_id"
+        ),
+
+        F.col("event.prompt_category").alias(
             "prompt_category"
         ),
 
-        col("event.prompt_text").alias("prompt_text"),
+        F.col("event.prompt_text").alias(
+            "prompt_text"
+        ),
 
-        # Response fields
-        col("event.latency_ms").alias("latency_ms"),
+        F.col("event.prompt_language").alias(
+            "prompt_language"
+        ),
 
-        col("event.prompt_tokens").alias(
+        F.col("event.prompt_length").alias(
+            "prompt_length"
+        ),
+
+        F.col("event.prompt_complexity").alias(
+            "prompt_complexity"
+        ),
+
+        F.col("event.contains_code").alias(
+            "contains_code"
+        ),
+
+        F.col("event.contains_image").alias(
+            "contains_image"
+        ),
+
+        # ----------------------------------------------------------------------
+        # Model
+        # ----------------------------------------------------------------------
+
+        F.col("event.model_provider").alias(
+            "model_provider"
+        ),
+
+        F.col("event.model_name").alias(
+            "model_name"
+        ),
+
+        # ----------------------------------------------------------------------
+        # AI Performance
+        # ----------------------------------------------------------------------
+
+        F.col("event.latency_ms").alias(
+            "latency_ms"
+        ),
+
+        F.col("event.queue_time_ms").alias(
+            "queue_time_ms"
+        ),
+
+        F.col("event.inference_time_ms").alias(
+            "inference_time_ms"
+        ),
+
+        F.col("event.render_time_ms").alias(
+            "render_time_ms"
+        ),
+
+        F.col("event.prompt_tokens").alias(
             "prompt_tokens"
         ),
 
-        col("event.completion_tokens").alias(
+        F.col("event.completion_tokens").alias(
             "completion_tokens"
         ),
 
-        col("event.total_tokens").alias(
+        F.col("event.total_tokens").alias(
             "total_tokens"
         ),
 
-        col("event.response_cost").alias(
+        F.col("event.response_cost").alias(
             "response_cost"
         ),
 
-        col("event.success").alias("success"),
+        F.col("event.success").alias(
+            "success"
+        ),
 
-        # Feedback fields
-        col("event.feedback").alias("feedback"),
+        F.col("event.retry_count").alias(
+            "retry_count"
+        ),
 
-        col("event.rating").alias("rating"),
+        F.col("event.cache_hit").alias(
+            "cache_hit"
+        ),
 
-        # Logout fields
-        col(
-            "event.session_duration_minutes"
-        ).alias("session_duration_minutes"),
+        F.col("event.finish_reason").alias(
+            "finish_reason"
+        ),
 
-        # Kafka metadata retained from Bronze
-        col("kafka_topic"),
+        F.col("event.temperature").alias(
+            "temperature"
+        ),
 
-        col("kafka_partition"),
+        F.col("event.max_tokens").alias(
+            "max_tokens"
+        ),
 
-        col("kafka_offset"),
+        # ----------------------------------------------------------------------
+        # Feedback
+        # ----------------------------------------------------------------------
 
-        col("kafka_timestamp"),
+        F.col("event.feedback").alias(
+            "feedback"
+        ),
 
-        col("ingested_at"),
+        F.col("event.rating").alias(
+            "rating"
+        ),
+
+        F.col("event.feedback_reason").alias(
+            "feedback_reason"
+        ),
+
+        # ----------------------------------------------------------------------
+        # Kafka Lineage
+        # ----------------------------------------------------------------------
+
+        F.col("kafka_topic").alias(
+            "kafka_topic"
+        ),
+
+        F.col("kafka_partition").alias(
+            "kafka_partition"
+        ),
+
+        F.col("kafka_offset").alias(
+            "kafka_offset"
+        ),
+
+        F.col("kafka_timestamp").alias(
+            "kafka_timestamp"
+        ),
+
+        F.col("ingested_at").alias(
+            "ingested_at"
+        ),
+
+        # ----------------------------------------------------------------------
+        # Parsing Status
+        # ----------------------------------------------------------------------
+
+        F.col("json_parse_success").alias(
+            "json_parse_success"
+        ),
     )
 
     return silver_df
 
 
-# ==========================================================
-# Data Validation
-# ==========================================================
+# ==============================================================================
+# Generate Missing Event IDs
+# ==============================================================================
 
-def validate_events(silver_df):
+def generate_event_ids(
+    silver_df: DataFrame,
+) -> DataFrame:
     """
-    Remove unusable records.
+    Generate deterministic fallback event IDs for events where the
+    producer did not provide event_id.
 
-    Every valid event must contain:
-    - event_id
-    - event_type
-    - user_id
-    - session_id
-    - event timestamp
+    Kafka topic + partition + offset uniquely identifies a Kafka record.
     """
 
-    valid_df = silver_df.filter(
-        col("event_id").isNotNull()
-        & col("event_type").isNotNull()
-        & col("user_id").isNotNull()
-        & col("session_id").isNotNull()
-        & col("event_timestamp").isNotNull()
+    print()
+    print("=" * 80)
+    print("GENERATING MISSING EVENT IDS")
+    print("=" * 80)
+
+    missing_before = (
+        silver_df
+        .filter(
+            F.col("event_id").isNull()
+        )
+        .count()
     )
 
-    return valid_df
+    print(
+        f"Missing event IDs : {missing_before}"
+    )
+
+    result_df = (
+        silver_df
+        .withColumn(
+            "event_id",
+            F.when(
+                F.col("event_id").isNotNull(),
+                F.col("event_id"),
+            ).otherwise(
+                F.concat(
+                    F.lit("evt_kafka_"),
+                    F.col("kafka_partition").cast("string"),
+                    F.lit("_"),
+                    F.col("kafka_offset").cast("string"),
+                )
+            ),
+        )
+    )
+
+    missing_after = (
+        result_df
+        .filter(
+            F.col("event_id").isNull()
+        )
+        .count()
+    )
+
+    print(
+        f"Missing event IDs after fix : {missing_after}"
+    )
+
+    return result_df
 
 
-# ==========================================================
+# ==============================================================================
+# Event-Aware Validation
+# ==============================================================================
+
+def validate_events(
+    silver_df: DataFrame,
+) -> DataFrame:
+    """
+    Validate events using rules appropriate to the event type.
+
+    Required for every event:
+        event_id
+        event_type
+        user_id
+        event_timestamp
+
+    Required for interaction/session events:
+        session_id
+
+    user_created, subscription_created and payment events
+    do not require session_id.
+    """
+
+    print()
+    print("=" * 80)
+    print("VALIDATING SILVER EVENTS")
+    print("=" * 80)
+
+    session_events = [
+        "session_started",
+        "user_login",
+        "chat_started",
+        "prompt_submitted",
+        "response_generated",
+        "feedback_submitted",
+        "user_logout",
+    ]
+
+    base_condition = (
+        F.col("event_id").isNotNull()
+        & F.col("event_type").isNotNull()
+        & F.col("user_id").isNotNull()
+        & F.col("event_timestamp").isNotNull()
+        & F.col("json_parse_success")
+    )
+
+    session_condition = (
+        ~F.col("event_type").isin(
+            session_events
+        )
+        |
+        F.col("session_id").isNotNull()
+    )
+
+    validated_df = (
+        silver_df
+        .withColumn(
+            "validation_status",
+            F.when(
+                base_condition
+                & session_condition,
+                F.lit("valid"),
+            ).otherwise(
+                F.lit("invalid")
+            ),
+        )
+    )
+
+    valid_count = (
+        validated_df
+        .filter(
+            F.col("validation_status") == "valid"
+        )
+        .count()
+    )
+
+    invalid_count = (
+        validated_df
+        .filter(
+            F.col("validation_status") == "invalid"
+        )
+        .count()
+    )
+
+    print(
+        f"Valid records   : {valid_count}"
+    )
+
+    print(
+        f"Invalid records : {invalid_count}"
+    )
+
+    return (
+        validated_df
+        .filter(
+            F.col("validation_status") == "valid"
+        )
+        .drop("validation_status")
+    )
+
+
+# ==============================================================================
 # Remove Duplicates
-# ==========================================================
+# ==============================================================================
 
-def remove_duplicates(silver_df):
+def remove_duplicates(
+    silver_df: DataFrame,
+) -> DataFrame:
     """
     Remove duplicate events using event_id.
-
-    event_id is unique for every generated SaaS event.
     """
 
-    deduplicated_df = silver_df.dropDuplicates(
-        ["event_id"]
+    print()
+    print("=" * 80)
+    print("REMOVING DUPLICATE EVENTS")
+    print("=" * 80)
+
+    before_count = silver_df.count()
+
+    clean_df = (
+        silver_df
+        .dropDuplicates(
+            ["event_id"]
+        )
     )
 
-    return deduplicated_df
+    after_count = clean_df.count()
+
+    print(
+        f"Records before deduplication : {before_count}"
+    )
+
+    print(
+        f"Duplicate records removed     : "
+        f"{before_count - after_count}"
+    )
+
+    print(
+        f"Records after deduplication   : {after_count}"
+    )
+
+    return clean_df
 
 
-# ==========================================================
+# ==============================================================================
+# Data Quality Report
+# ==============================================================================
+
+def print_quality_report(
+    silver_df: DataFrame,
+) -> None:
+    """
+    Print Silver data-quality and business summary.
+    """
+
+    print()
+    print("=" * 80)
+    print("SILVER DATA QUALITY REPORT")
+    print("=" * 80)
+
+    total_records = silver_df.count()
+
+    print(
+        f"Total Silver Records : {total_records}"
+    )
+
+    print()
+    print("Event Distribution")
+    print("-" * 80)
+
+    (
+        silver_df
+        .groupBy("event_type")
+        .count()
+        .orderBy(
+            F.col("count").desc()
+        )
+        .show(
+            50,
+            truncate=False,
+        )
+    )
+
+    print()
+    print("Distinct Users")
+
+    print(
+        silver_df
+        .select("user_id")
+        .distinct()
+        .count()
+    )
+
+    print()
+    print("Distinct Sessions")
+
+    print(
+        silver_df
+        .filter(
+            F.col("session_id").isNotNull()
+        )
+        .select("session_id")
+        .distinct()
+        .count()
+    )
+
+    print()
+    print("Distinct Subscriptions")
+
+    print(
+        silver_df
+        .filter(
+            F.col("subscription_id").isNotNull()
+        )
+        .select("subscription_id")
+        .distinct()
+        .count()
+    )
+
+    print()
+    print("Successful Payments")
+
+    print(
+        silver_df
+        .filter(
+            F.col("payment_status") == "success"
+        )
+        .count()
+    )
+
+    print()
+    print("Date Range")
+
+    (
+        silver_df
+        .select(
+            F.min(
+                "event_timestamp"
+            ).alias(
+                "min_event_timestamp"
+            ),
+            F.max(
+                "event_timestamp"
+            ).alias(
+                "max_event_timestamp"
+            ),
+        )
+        .show(
+            truncate=False
+        )
+    )
+
+
+# ==============================================================================
 # Write Silver
-# ==========================================================
+# ==============================================================================
 
-def write_silver_data(silver_df):
+def write_silver_data(
+    silver_df: DataFrame,
+) -> None:
     """
-    Write clean structured events to Silver Parquet.
+    Write Silver dataset as Parquet.
     """
+
+    print()
+    print("=" * 80)
+    print("WRITING SILVER DATASET")
+    print("=" * 80)
 
     (
         silver_df.write
         .mode("overwrite")
-        .parquet(SILVER_OUTPUT_PATH)
+        .parquet(
+            SILVER_OUTPUT_PATH
+        )
+    )
+
+    print(
+        f"Silver Output : {SILVER_OUTPUT_PATH}"
     )
 
 
-# ==========================================================
-# Main Application
-# ==========================================================
+# ==============================================================================
+# Main
+# ==============================================================================
 
 def main():
     """
-    Execute the complete Bronze → Silver transformation.
+    Execute complete Bronze → Silver transformation.
     """
 
+    print()
     print("=" * 80)
-    print("AI SaaS Silver Processing Layer")
-    print("=" * 80)
-
-    print(f"Bronze input:  {BRONZE_INPUT_PATH}")
-    print(f"Silver output: {SILVER_OUTPUT_PATH}")
-
+    print("AI SaaS SILVER PROCESSING LAYER")
     print("=" * 80)
 
-    spark = create_spark_session()
+    spark = None
 
-    print("Spark session created.")
+    try:
 
-    # ------------------------------------------------------
-    # Read Bronze
-    # ------------------------------------------------------
+        # ----------------------------------------------------------------------
+        # Spark
+        # ----------------------------------------------------------------------
 
-    bronze_df = read_bronze_data(
-        spark
-    )
+        spark = create_spark_session()
 
-    bronze_count = bronze_df.count()
+        print(
+            "Spark session created successfully."
+        )
 
-    print(
-        f"Bronze records read: {bronze_count}"
-    )
+        # ----------------------------------------------------------------------
+        # Bronze
+        # ----------------------------------------------------------------------
 
-    # ------------------------------------------------------
-    # Parse JSON
-    # ------------------------------------------------------
+        bronze_df = read_bronze_data(
+            spark
+        )
 
-    parsed_df = parse_events(
-        bronze_df
-    )
+        bronze_count = bronze_df.count()
 
-    # ------------------------------------------------------
-    # Flatten structure
-    # ------------------------------------------------------
+        # ----------------------------------------------------------------------
+        # JSON Parsing
+        # ----------------------------------------------------------------------
 
-    silver_df = flatten_events(
-        parsed_df
-    )
+        parsed_df = parse_events(
+            bronze_df
+        )
 
-    # ------------------------------------------------------
-    # Validate
-    # ------------------------------------------------------
+        # ----------------------------------------------------------------------
+        # Flatten
+        # ----------------------------------------------------------------------
 
-    valid_df = validate_events(
-        silver_df
-    )
+        silver_df = flatten_events(
+            parsed_df
+        )
 
-    valid_count = valid_df.count()
+        # ----------------------------------------------------------------------
+        # Generate Missing IDs
+        # ----------------------------------------------------------------------
 
-    print(
-        f"Valid records: {valid_count}"
-    )
+        silver_df = generate_event_ids(
+            silver_df
+        )
 
-    invalid_count = (
-        bronze_count - valid_count
-    )
+        # ----------------------------------------------------------------------
+        # Validate
+        # ----------------------------------------------------------------------
 
-    print(
-        f"Invalid records removed: {invalid_count}"
-    )
+        valid_df = validate_events(
+            silver_df
+        )
 
-    # ------------------------------------------------------
-    # Deduplicate
-    # ------------------------------------------------------
+        valid_count = valid_df.count()
 
-    clean_df = remove_duplicates(
-        valid_df
-    )
+        # ----------------------------------------------------------------------
+        # Deduplicate
+        # ----------------------------------------------------------------------
 
-    clean_count = clean_df.count()
+        clean_df = remove_duplicates(
+            valid_df
+        )
 
-    duplicate_count = (
-        valid_count - clean_count
-    )
+        clean_count = clean_df.count()
 
-    print(
-        f"Duplicate records removed: {duplicate_count}"
-    )
+        # ----------------------------------------------------------------------
+        # Quality Report
+        # ----------------------------------------------------------------------
 
-    print(
-        f"Final Silver records: {clean_count}"
-    )
+        print_quality_report(
+            clean_df
+        )
 
-    # ------------------------------------------------------
-    # Write Silver
-    # ------------------------------------------------------
+        # ----------------------------------------------------------------------
+        # Write
+        # ----------------------------------------------------------------------
 
-    write_silver_data(
-        clean_df
-    )
+        write_silver_data(
+            clean_df
+        )
 
-    print("=" * 80)
-    print("SILVER PROCESSING COMPLETED")
-    print("=" * 80)
+        # ----------------------------------------------------------------------
+        # Final Summary
+        # ----------------------------------------------------------------------
 
-    print(
-        f"{clean_count} clean events written to:"
-    )
+        print()
+        print("=" * 80)
+        print("SILVER PROCESSING COMPLETED SUCCESSFULLY")
+        print("=" * 80)
 
-    print(
-        SILVER_OUTPUT_PATH
-    )
+        print(
+            f"Bronze Records       : {bronze_count}"
+        )
 
-    print("=" * 80)
+        print(
+            f"Valid Records        : {valid_count}"
+        )
 
-    spark.stop()
+        print(
+            f"Final Silver Records : {clean_count}"
+        )
+
+        print(
+            f"Records Removed      : "
+            f"{bronze_count - clean_count}"
+        )
+
+        print(
+            f"Silver Output        : "
+            f"{SILVER_OUTPUT_PATH}"
+        )
+
+        print("=" * 80)
+
+    except Exception as error:
+
+        print()
+        print("=" * 80)
+        print("ERROR: SILVER PROCESSING FAILED")
+        print("=" * 80)
+
+        print(
+            f"{type(error).__name__}: {error}"
+        )
+
+        raise
+
+    finally:
+
+        if spark is not None:
+
+            spark.stop()
+
+            print(
+                "Spark session stopped."
+            )
 
 
-# ==========================================================
+# ==============================================================================
 # Entry Point
-# ==========================================================
+# ==============================================================================
 
 if __name__ == "__main__":
     main()
