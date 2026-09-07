@@ -35,6 +35,9 @@ data/silver/
 data/gold/
 data/checkpoints/
 
+# Generated BI verification artifacts
+data/bi/
+
 # Test
 .pytest_cache/
 
