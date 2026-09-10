@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: ai_saas_analytics
+    database: awsdatacatalog
+    schema: ai_saas_analytics
+
+    tables:
+      - name: country_metrics
+
+      - name: executive_dashboard
+
+      - name: feedback_metrics
+
+      - name: model_performance
+
+      - name: prompt_metrics
+
+      - name: revenue_metrics
+
+      - name: session_metrics
+
+      - name: subscription_metrics
+
+      - name: user_activity

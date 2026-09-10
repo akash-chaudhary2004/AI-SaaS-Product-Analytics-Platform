@@ -1,0 +1,16 @@
+name: 'ai_saas_analytics'
+version: '1.0.0'
+config-version: 2
+
+profile: 'ai_saas_analytics'
+
+model-paths: ["models"]
+
+models:
+  ai_saas_analytics:
+    staging:
+      +materialized: view
+
+    marts:
+      +materialized: table
+      +s3_data_dir: "s3://ai-saas-analytics-lakehouse-2026/dbt/"

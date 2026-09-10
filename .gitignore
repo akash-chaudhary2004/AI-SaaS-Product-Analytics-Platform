@@ -49,3 +49,6 @@ dist/
 # OS Files
 .DS_Store
 Thumbs.db
+# dbt generated artifacts
+dbt/**/target/
+dbt/**/logs/

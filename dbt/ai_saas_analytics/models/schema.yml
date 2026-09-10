@@ -1,0 +1,57 @@
+version: 2
+
+models:
+
+  - name: stg_executive_dashboard
+    columns:
+      - name: total_users
+        tests:
+          - not_null
+
+  - name: stg_user_activity
+    columns:
+      - name: event_date
+        tests:
+          - not_null
+
+  - name: stg_revenue_metrics
+    columns:
+      - name: event_date
+        tests:
+          - not_null
+
+  - name: stg_model_performance
+    columns:
+      - name: model_name
+        tests:
+          - not_null
+
+  - name: stg_prompt_metrics
+    columns:
+      - name: prompt_category
+        tests:
+          - not_null
+
+  - name: stg_country_metrics
+    columns:
+      - name: country
+        tests:
+          - not_null
+
+  - name: stg_session_metrics
+    columns:
+      - name: subscription_plan
+        tests:
+          - not_null
+
+  - name: stg_subscription_metrics
+    columns:
+      - name: subscription_plan
+        tests:
+          - not_null
+
+  - name: stg_feedback_metrics
+    columns:
+      - name: feedback
+        tests:
+          - not_null
