@@ -1,58 +1,135 @@
+
+# ==========================================
 # Python
+# ==========================================
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+*.so
 
-# Virtual Environment
+# Virtual environments
 .venv/
+.venv-*/
 venv/
 env/
+ENV/
 
-# Environment Variables
+# Python tooling and test artifacts
+.python-version
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# ==========================================
+# Credentials and environment configuration
+# ==========================================
 .env
+.env.*
+!.env.example
+.aws/
+*.pem
+*.key
+credentials
+credentials.*
+secrets/
+secrets.*
 
-# Logs
+# Never commit local credential or token files
+*credentials*.json
+*service-account*.json
+*token*.json
+
+# ==========================================
+# Logs and temporary files
+# ==========================================
 logs/
 *.log
+*.tmp
+*.temp
+*.bak
+*.old
+*.swp
+*.swo
+~$*
 
-# Jupyter
+# ==========================================
+# Virtual machine / OS files
+# ==========================================
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ==========================================
+# Editors and IDEs
+# ==========================================
+.vscode/
+.idea/
+*.code-workspace
+
+# ==========================================
+# Jupyter notebooks
+# ==========================================
 .ipynb_checkpoints/
 
-# VS Code
-.vscode/
+# ==========================================
+# Generated lakehouse data
+# Keep source code and schemas; exclude generated data
+# ==========================================
+data/bronze/
+data/silver/
+data/gold/
+data/checkpoints/
+data/bi/
 
-# Spark
+# ==========================================
+# Spark and local metastore artifacts
+# ==========================================
 spark-warehouse/
 metastore_db/
 .metastore_db/
 .sparkStaging/
 derby.log
 
-# Generated Lakehouse Data
-data/bronze/
-data/silver/
-data/gold/
-data/checkpoints/
+# ==========================================
+# dbt generated artifacts
+# Keep models/, macros/, seeds/, snapshots/,
+# tests/, analyses/, and project configuration
+# ==========================================
+dbt/**/target/
+dbt/**/logs/
+dbt/**/dbt_packages/
 
-# Generated BI verification artifacts
-data/bi/
-
-# Test
-.pytest_cache/
-
-# Build
+# ==========================================
+# Build and distribution artifacts
+# ==========================================
 build/
 dist/
 *.egg-info/
+pip-wheel-metadata/
 
-# OS Files
-.DS_Store
-Thumbs.db
-# dbt generated artifacts
-dbt/**/target/
-dbt/**/logs/
-
-# Airflow local environment
+# ==========================================
+# Airflow local artifacts (legacy)
+# ==========================================
 airflow/.env
 airflow/logs/
+airflow/__pycache__/
+
+# ==========================================
+# Docker local overrides (legacy)
+# ==========================================
+docker-compose.override.yml
+docker-compose.*.override.yml
+
+# ==========================================
+# Node.js artifacts (if frontend tooling is added)
+# ==========================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*

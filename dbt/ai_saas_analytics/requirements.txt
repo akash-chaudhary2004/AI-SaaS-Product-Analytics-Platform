@@ -1,0 +1,3 @@
+dbt-core==1.12.5
+dbt-athena-community==1.11.1
+botocore[crt]==1.43.111
