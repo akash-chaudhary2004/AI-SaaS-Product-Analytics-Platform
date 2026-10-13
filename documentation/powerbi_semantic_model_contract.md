@@ -191,36 +191,6 @@ These counts reflect the previous validation run and may change if the underlyin
 
 ---
 
-# 8. Original Local Architecture
-
-The project previously used a local streaming and processing architecture:
-
-Python Event Generator
-↓
-Kafka
-↓
-Spark Structured Streaming
-↓
-Bronze Layer
-↓
-Silver Layer
-↓
-Gold Layer
-↓
-Gold Parquet Datasets
-↓
-Power BI
-
-The Docker, Kafka, Spark, and related orchestration implementation has been removed from the active working copy to simplify the final portfolio project.
-
-The original implementation is preserved in the separate backup:
-
-`D:\AI-SaaS-Project-Backup\AI-SaaS-Product-Analytics-Platform`
-
-The backup should remain untouched unless the original implementation is deliberately restored.
-
----
-
 # 9. Current Cloud Architecture
 
 The current portfolio architecture is:
@@ -385,23 +355,9 @@ Changes to upstream dbt models should preserve the expected Power BI schema or b
 
 ---
 
-# 15. Original Power BI Data Source
-
-The original documented source was local Gold Parquet data:
-
-Local Spark Gold
-↓
-Parquet Files
-↓
-Power BI
-
-This describes the previous local workflow. It is not the source configuration of the cloud-connected Power BI copy that was verified later.
-
----
-
 # 16. Current Power BI Data Source
 
-The cloud-connected Power BI copy uses AWS Athena through the AWS Data Catalog.
+The cloud-connected Power BI uses AWS Athena through the AWS Data Catalog.
 
 The nine verified fact queries map to the following Athena tables:
 
@@ -550,21 +506,6 @@ Version: 2.0
 Original contract date: 2026-09-07
 Architecture update: 2026-10-09
 
-Current status:
-
-- AWS S3 / Glue / Athena: VERIFIED
-- Nine Athena analytics marts: VERIFIED
-- Power BI Athena source connections: VERIFIED
-- Cloud-connected Power BI refresh: SUCCESSFUL
-- Exact semantic-model relationships: NOT FULLY VERIFIED
-- Exact DAX definitions: NOT FULLY VERIFIED
-- Full KPI reconciliation: PENDING
-- Repository audit: IN PROGRESS
-- GitHub publication: PENDING
-- Resume integration: PENDING
-
 Current architecture:
 
 Python → Amazon S3 → AWS Glue Data Catalog → Amazon Athena → dbt → Power BI
-
-The original Docker/Kafka/Spark/Airflow implementation is preserved separately and is not required to run the current portfolio workflow.
